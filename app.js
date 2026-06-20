@@ -1898,8 +1898,15 @@ function init() {
   });
 
   showTab('dashboard');
-  // C (2026-06-04) — 알림 탭 딥링크 ?session=<name> → 그 세션 자동 진입 (restoreLiveSessions 가 PENDING_OPEN 처리). 동기 설정이라 아래 .then 콜백보다 먼저.
-  try { const sp = new URLSearchParams(location.search).get('session'); if (sp) PENDING_OPEN = sp; } catch (_) {}
+  // 자동 설정 URL — ?token=X&daemon=Y 로 접속 시 localStorage 저장 + URL 정리 (1회 링크로 폰 설정 완료)
+  try {
+    const sp = new URLSearchParams(location.search);
+    const qt = sp.get('token'), qd = sp.get('daemon');
+    if (qt) { localStorage.setItem('cmbToken', qt); toast('🔑 토큰 자동 설정 완료'); }
+    if (qd) { localStorage.setItem('daemonBase', qd); toast('🔗 daemon 주소 자동 설정'); }
+    if (qt || qd) { sp.delete('token'); sp.delete('daemon'); const clean = sp.toString(); history.replaceState(null, '', location.pathname + (clean ? '?' + clean : '')); }
+    const sess = sp.get('session'); if (sess) PENDING_OPEN = sess;
+  } catch (_) {}
   checkHealth().then(() => { renderSettings(); renderFab(currentTab()); schedulePoll(); restoreLiveSessions(); });
 
   if ('serviceWorker' in navigator) {
