@@ -368,7 +368,7 @@ async function sendDirective(name) {
 }
 
 // 대시보드 일괄 갱신 (승인 대기 + 작업목록 task md + 결정필요 spec + 라이브 터미널 + 완료 bg 부활)
-function loadDashboard() { loadPrompts(); loadSessions(); loadSpecs(); loadLive(); loadBgArchived(); }
+function loadDashboard() { loadPrompts(); loadSessions(); loadSpecs(); loadLive(); loadBgArchived(); loadArrivalCard(); }
 
 // ③ 완료된 bg 작업 — 🔄 부활 (2026-06-04, 사용자 명시 "토큰착취 부활").
 //   bg jobs active 목록은 혼란이라 안 띄우고(2026-05-31 제거 유지), *완료(archived)분만* collapsible drawer.
@@ -716,6 +716,8 @@ async function onSettingsTap(e) {
 // V2 (2026-06-11) — 설계 탭은 PC 꺼져도 dead-end 없음: 전송 대기(outbox) + 마지막 동기 캐시(읽기 전용).
 async function loadInbox() {
   renderOutbox();   // 📤 전송 대기 — 폰 로컬 (PC 무관)
+  renderMirrorBadge();
+  renderSkillLauncher();
   const list = document.getElementById('inboxList');
   const note = document.getElementById('inboxNote');
   let items = [], arch = [], live = true;
@@ -844,7 +846,12 @@ async function flushOutbox() {
       } catch (_) { break; }   // 연결 끊김 — 보관 유지, 다음 기회
     }
   } finally { OUTBOX_FLUSHING = false; }
-  if (sent) { toast(`📤 보관한 설계 ${sent}건 PC 로 전송됨`); if (currentTab() === 'design') loadInbox(); }
+  if (sent) {
+    const now = new Date().toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    localStorage.setItem('cmbLastFlush', JSON.stringify({ ts: Date.now(), count: sent }));
+    toast(`✅ 설계 ${sent}건 PC 전송 완료 (${now})`);
+    if (currentTab() === 'design') loadInbox();
+  }
 }
 
 function renderOutbox() {
@@ -1901,6 +1908,130 @@ function init() {
 
 function currentTab() {
   return document.querySelector('.tab.is-active')?.dataset.tab || 'dashboard';
+}
+
+// ── M1: mirror 상태 배지 (설계 탭) ──
+async function renderMirrorBadge() {
+  let el = document.getElementById('mirrorBadge');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'mirrorBadge';
+    el.style.cssText = 'padding:6px 12px;font-size:12px;border-radius:8px;margin:4px 0';
+    const list = document.getElementById('inboxList');
+    if (list) list.parentElement.insertBefore(el, list);
+  }
+  try {
+    const r = await dfetch(`${daemonBase()}/mirror`, { cache: 'no-store' });
+    if (!r.ok) throw 0;
+    const m = await r.json();
+    if (!m.configured) { el.hidden = true; return; }
+    el.hidden = false;
+    if (m.fresh) {
+      const ago = m.ageH < 1 ? '방금' : `${Math.floor(m.ageH)}시간 전`;
+      el.textContent = `☁ KB 동기 정상 (${ago})`;
+      el.style.background = '#1a2e1a'; el.style.color = '#7ee87e';
+    } else {
+      const days = Math.floor(m.ageH / 24);
+      el.textContent = `⏳ KB mirror ${days}일+ 미동기 — 클라우드 설계가 옛 기준`;
+      el.style.background = '#2e2a1a'; el.style.color = '#e8c87e';
+    }
+  } catch (_) {
+    el.hidden = true;
+  }
+  // 전송 완료 카드
+  try {
+    const flush = JSON.parse(localStorage.getItem('cmbLastFlush') || 'null');
+    let fc = document.getElementById('flushCard');
+    if (flush && Date.now() - flush.ts < 3600000) {
+      if (!fc) {
+        fc = document.createElement('div'); fc.id = 'flushCard';
+        fc.style.cssText = 'padding:6px 12px;font-size:12px;border-radius:8px;margin:4px 0;background:#1a2e1a;color:#7ee87e';
+        el.parentElement.insertBefore(fc, el.nextSibling);
+      }
+      const when = new Date(flush.ts).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      fc.textContent = `✅ 설계 ${flush.count}건 PC 전송 완료 (${when})`;
+      fc.hidden = false;
+    } else if (fc) { fc.hidden = true; }
+  } catch (_) {}
+}
+
+// ── M4: 스킬 런처 버튼 + 모달 (설계 탭) ──
+function renderSkillLauncher() {
+  if (document.getElementById('skillLauncherBtn')) return;
+  const cloud = document.getElementById('newCloudDesign');
+  if (!cloud) return;
+  const btn = document.createElement('button');
+  btn.id = 'skillLauncherBtn';
+  btn.className = 'qr-btn';
+  btn.textContent = '📋 스킬';
+  btn.style.cssText = 'margin-left:6px';
+  cloud.parentElement.insertBefore(btn, cloud.nextSibling);
+  btn.addEventListener('click', showSkillModal);
+}
+
+const MOBILE_SKILLS = [
+  { icon: '🔍', name: '리서치', cmd: 'mobile-research 절차대로 리서치 해줘', desc: '서칭+학습 — 레퍼런스 수집' },
+  { icon: '🗂', name: '정리', cmd: 'mobile-curate 절차대로 정리 해줘', desc: '카탈로그 검토+추천' },
+  { icon: '🎯', name: '폴리시 (분석)', cmd: 'mobile-polish-plan 절차대로 분석 해줘', desc: '고도화 분석 (코드 X)' },
+];
+
+function showSkillModal() {
+  let modal = document.getElementById('skillModal');
+  if (!modal) {
+    modal = document.createElement('div'); modal.id = 'skillModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center';
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'background:#1a1a2e;border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:440px;max-height:70vh;overflow-y:auto';
+    sheet.innerHTML = '<div style="text-align:center;font-weight:bold;margin-bottom:12px">📋 모바일 스킬</div>'
+      + MOBILE_SKILLS.map((s) =>
+        `<div style="background:#252540;border-radius:10px;padding:10px 12px;margin:6px 0">`
+        + `<div style="font-weight:bold">${s.icon} ${s.name}</div>`
+        + `<div style="font-size:12px;color:#999;margin:2px 0">${s.desc}</div>`
+        + `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">`
+        + `<code style="flex:1;font-size:11px;background:#1a1a2e;padding:4px 6px;border-radius:6px;word-break:break-all">"${s.cmd}"</code>`
+        + `<button class="qr-btn skill-copy" data-skill-cmd="${s.cmd}" style="white-space:nowrap">복사</button>`
+        + `</div></div>`
+      ).join('')
+      + '<div style="font-size:11px;color:#666;margin-top:8px;text-align:center">⚠ PC 전용: push / pull / sync</div>'
+      + '<button id="skillModalClose" class="qr-btn" style="width:100%;margin-top:10px">닫기</button>';
+    modal.appendChild(sheet);
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.hidden = true;
+      const cp = e.target.closest('.skill-copy');
+      if (cp) {
+        const cmd = cp.dataset.skillCmd;
+        if (navigator.clipboard) navigator.clipboard.writeText(cmd).then(() => toast('📋 복사됨'), () => toast('복사 실패'));
+        else { modal.hidden = true; editText('스킬 호출 문구 — 선택 후 복사', cmd).then(() => { modal.hidden = false; }); }
+      }
+    });
+    document.getElementById('skillModalClose').addEventListener('click', () => { modal.hidden = true; });
+  }
+  modal.hidden = false;
+}
+
+// ── M1: 대시보드 도착 카드 (FULL 모드) ──
+async function loadArrivalCard() {
+  let el = document.getElementById('arrivalCard');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'arrivalCard';
+    el.style.cssText = 'cursor:pointer';
+    el.className = 'card';
+    const dash = document.getElementById('specList');
+    if (dash) dash.parentElement.insertBefore(el, dash);
+    el.addEventListener('click', () => showTab('design'));
+  }
+  try {
+    const r = await dfetch(`${daemonBase()}/inbox`, { cache: 'no-store' });
+    if (!r.ok) throw 0;
+    const items = await r.json();
+    const pending = items.filter((it) => it.status === 'pending');
+    const cloud = pending.filter((it) => it.origin === 'mobile-cloud' || it.origin === 'mobile');
+    if (!pending.length) { el.hidden = true; return; }
+    el.hidden = false;
+    const when = pending[0].createdAt ? new Date(pending[0].createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const src = cloud.length ? '☁' : '📤';
+    el.innerHTML = `<strong>${src} 설계 ${pending.length}건 도착</strong><span class="dim">${when ? when + ' · ' : ''}탭하면 설계 탭</span>`;
+  } catch (_) { el.hidden = true; }
 }
 
 document.addEventListener('DOMContentLoaded', init);

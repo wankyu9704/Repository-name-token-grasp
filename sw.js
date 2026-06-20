@@ -1,5 +1,5 @@
 /* ClaudeMobileBridge — service worker (앱 셸 캐시, 오프라인 구동) */
-const CACHE = 'cmb-shell-v91';   // bump 시 index.html 의 .ver-chip 도 같은 번호로
+const CACHE = 'cmb-shell-v92';   // bump 시 index.html 의 .ver-chip 도 같은 번호로
 const SHELL = [
   './index.html',
   './styles.css',
