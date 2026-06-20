@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- C80-P07: safe-area 위해 viewport-fit=cover -->
+  <!-- interactive-widget=resizes-content: 키보드 뜨면 layout viewport 가 줄어 출력 영역이 실제 높이를 받음(칸 부족 완화) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#121212" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Token Grasp</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.png?v=4" />
+  <link rel="apple-touch-icon" href="icon.png?v=4" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- P1-b: xterm.js CDN (FULL 라이브 터미널) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <!-- #4 스크롤 성능: WebGL GPU 렌더러 (canvas/DOM 보다 빠름, 모바일 스크롤 부드럽게) -->
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-webgl@0.16.0/lib/xterm-addon-webgl.min.js"></script>
+</head>
+<body>
+  <!-- D10 (2026-06-12) — SVG 라인 아이콘 sprite: chrome 아이콘 이모지 → 라인 아이콘 통일.
+       OS emoji font 차이(일부 갤럭시 회색 단색 렌더) 무관 + stroke=currentColor = 테마/상태색 따름. 스타일은 .svgi (styles.css) -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></symbol>
+    <symbol id="i-smartphone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8Z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10Z"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09Z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2Z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  </svg>
+
+  <!-- C80-P04: 연결 상태 = 점 + 텍스트 병기 -->
+  <header class="status-banner" id="statusBanner" data-mode="checking">
+    <span class="dot" aria-hidden="true"></span>
+    <span class="status-text" id="statusText">상태 확인 중…</span>
+    <!-- 셸 버전 칩 — sw.js 의 CACHE 버전과 함께 bump (폰이 새 셸 받았는지 즉시 확인용) -->
+    <span class="ver-chip">v91</span>
+    <button class="icon-btn" id="refreshBtn" title="새로고침" aria-label="새로고침"><svg class="svgi"><use href="#i-refresh"/></svg></button>
+  </header>
+
+  <!-- #7: pull-to-refresh 인디케이터 (우측 상단 고정) -->
+  <div class="ptr-indicator" id="ptrIndicator" aria-hidden="true"><svg class="svgi"><use href="#i-refresh"/></svg></div>
+
+  <main id="view">
+    <!-- 탭 1 — 대시보드 (FULL, 기존 런처 보존) -->
+    <section class="tab-panel" data-panel="dashboard" hidden>
+      <div class="full-only">
+        <!-- V2 — ⚠️ 승인 센터: 승인 대기 중인 세션 (외출 중 승인 대체제 — 알림 못 받았어도 여기 뜸) -->
+        <div id="promptWrap" hidden>
+          <h2 class="group-title gt-warn"><svg class="svgi"><use href="#i-alert"/></svg> 승인 대기 — 탭으로 즉시 응답</h2>
+          <div id="promptList" class="card-list"></div>
+        </div>
+        <!-- E3 — 진행 중 작업: 폰 attach 세션 + daemon 라이브 pty 전부 (👀 보기 = reattach 열람) -->
+        <div id="liveWrap" hidden>
+          <h2 class="group-title"><svg class="svgi"><use href="#i-phone"/></svg> 진행 중 작업 — 보기/복귀</h2>
+          <div id="liveList" class="card-list"></div>
+        </div>
+        <!-- ① 작업 목록 (task md) = PC Agent 대시보드와 동일 -->
+        <h2 class="group-title"><svg class="svgi"><use href="#i-clipboard"/></svg> 작업 목록 (task md)</h2>
+        <div id="sessionList" class="card-list"></div>
+        <!-- ② 결정 필요 = 모바일에서 만든 작업 — [이어서]/[task_save]/[정리] -->
+        <h2 class="group-title gt-decide"><svg class="svgi"><use href="#i-target"/></svg> 결정 필요 — 모바일에서 만든 작업</h2>
+        <div id="specList" class="card-list">
+          <div class="empty">모바일에서 만든 작업이 없어요 — 아래 📱 새 작업</div>
+        </div>
+        <!-- ③ 완료된 bg 작업 — 🔄 부활 (intent 로 새 bridge 세션, 사용자 주시. 자율 재실행 X) -->
+        <div id="bgArchivedWrap" hidden>
+          <div id="bgArchivedList" class="card-list"></div>
+        </div>
+      </div>
+      <div class="offline-note" id="dashOffline" hidden>
+        <div class="big-icon"><svg class="svgi"><use href="#i-moon"/></svg></div>
+        <p><strong>PC 꺼짐</strong> — 대시보드는 PC 가 켜져 있어야 동작합니다.</p>
+        <p class="dim">지금은 <a href="#" data-goto="design">설계 모드</a>로 아이디어를 잡아두세요. PC 깨면 이어서 구현됩니다.</p>
+      </div>
+    </section>
+
+    <!-- 탭 2 — 설계 (V2 — PC 무관 항상 작동: 캡처=폰 보관, 대화=Claude Project(GMD 전체 인지)) -->
+    <section class="tab-panel" data-panel="design" hidden>
+      <p class="lead">PC 와 무관하게 — 아이디어를 잡아두고, 내 GMD(수칙·스킬·에이전트·신념·VFX툴킷)를 아는 Claude 와 설계합니다.</p>
+      <button class="btn-primary block" id="newDesignChat"><svg class="svgi"><use href="#i-bulb"/></svg> 같이 설계 — 대화로 다듬기</button>
+      <p class="dim" style="margin:4px 2px 10px">내 GMD 전체를 아는 Claude 와 채팅. 화면 보면서 핑퐁 — 결과 스펙은 복사해 와서 📋 붙여넣기.</p>
+      <!-- F4 (2026-06-12) — 클라우드 1차 설계: claude.ai/code 클라우드 세션 (PC 꺼져도 백그라운드 자율 + inbox 자동 도착) -->
+      <button class="btn-ghost block" id="newCloudDesign"><svg class="svgi"><use href="#i-cloud"/></svg> 외주설계 — 시키고 결과만 받기</button>
+      <p class="dim" style="margin:4px 2px 10px">한 줄 시키고 앱 닫아도 클라우드에서 진행. 중간 컨펌 후 PC 켜지면 자동 도착.</p>
+      <p class="dim" id="inboxNote" hidden></p>
+      <div id="outboxWrap" hidden>
+        <h2 class="group-title"><svg class="svgi"><use href="#i-upload"/></svg> 전송 대기 — PC 켜지면 자동 전송</h2>
+        <div id="outboxList" class="card-list"></div>
+      </div>
+      <h2 class="group-title"><svg class="svgi"><use href="#i-download"/></svg> 캡처된 설계</h2>
+      <div id="inboxList" class="card-list">
+        <div class="empty">아직 캡처된 설계가 없습니다.</div>
+      </div>
+    </section>
+
+    <!-- 탭 3 — 환경설정 (P0 config) -->
+    <section class="tab-panel" data-panel="settings" hidden>
+      <h2 class="group-title">내 지식베이스</h2>
+      <ul class="settings-group" id="grpKb"></ul>
+      <h2 class="group-title">연결</h2>
+      <ul class="settings-group" id="grpConn"></ul>
+      <h2 class="group-title">설계 모드 (PC 꺼짐)</h2>
+      <ul class="settings-group" id="grpDesign"></ul>
+    </section>
+  </main>
+
+  <!-- C80-P03: 하단 1차 액션 (탭별) -->
+  <div class="fab-bar" id="fabBar"></div>
+
+  <!-- P1-b: 터미널 overlay (FULL 라이브 세션) -->
+  <div class="term-overlay" id="termOverlay" hidden>
+    <header class="term-header">
+      <button class="icon-btn term-icon" id="termMinimize" title="뒤로 (대시보드 복귀, 세션 유지)" aria-label="뒤로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="term-title" id="termTitle">Claude (대기)</span>
+      <button class="icon-btn term-icon" id="termStatus" title="statusline 보기" aria-label="statusline"><svg class="svgi"><use href="#i-info"/></svg></button>
+      <button class="icon-btn term-icon" id="termFullscreen" title="전체화면 (헤더/탭 접어 칸 넓게)" aria-label="전체화면"><svg class="svgi"><use href="#i-expand"/></svg></button>
+      <button class="icon-btn term-icon" id="termClose" title="닫기 (세션 종료)" aria-label="닫기">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+      </button>
+    </header>
+    <!-- 멀티세션 탭바 (세션별 pane 전환 + ✕ 닫기 + ＋ 새 세션) -->
+    <div class="term-tabs" id="termTabs" hidden></div>
+    <div class="term-body" id="termBody"></div>
+    <!-- E9: CLI 옵션/y-n 프롬프트 → 탭 승인 버튼 (raw 입력바는 아래 항상 유지 = fallback) -->
+    <div class="quick-replies" id="quickReplies" hidden></div>
+    <div class="term-input-bar">
+      <button class="icon-btn" id="termAttach" title="이미지/파일 첨부" aria-label="첨부"><svg class="svgi"><use href="#i-clip"/></svg></button>
+      <button class="icon-btn" id="termManual" title="승인 버튼 띄우기 (안 뜰 때)" aria-label="승인 버튼"><svg class="svgi"><use href="#i-hash"/></svg></button>
+      <!-- G1: 원격 음성 입력 (Web Speech API, ko-KR). 미지원 브라우저는 app.js 가 숨김. transcript→입력칸(자동 전송 X). -->
+      <button class="icon-btn" id="termMic" title="음성 입력 (한국어)" aria-label="음성 입력" hidden><svg class="svgi"><use href="#i-mic"/></svg></button>
+      <!-- E15: enterkeyhint=send → 모바일 키보드 Enter 가 "전송" 라벨. inputmode=text. (IME 조합 중 Enter = 한국어 IME fix 가 처리) -->
+      <input type="text" id="termInput" placeholder="여기에 입력… (Enter ↵)" enterkeyhint="send" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <button class="btn-primary" id="termSend">↵</button>
+    </div>
+    <!-- statusline 모달 (ℹ︎ 버튼 → 창으로 표시 + 복사 + 닫기) -->
+    <div class="sl-modal" id="slModal" hidden>
+      <div class="sl-box">
+        <div class="sl-head"><strong>statusline</strong><button class="icon-btn" id="slClose" aria-label="닫기"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+        <div class="sl-text" id="slText"></div>
+        <button class="btn-primary block" id="slCopy">복사</button>
+      </div>
+    </div>
+    <!-- 📎 첨부 시트 (사진 / PC 파일 검색) -->
+    <div class="sl-modal" id="attachSheet" hidden>
+      <div class="sl-box">
+        <div class="sl-head"><strong>첨부</strong><button class="icon-btn" id="attachClose" aria-label="닫기"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+        <button class="btn-primary block" id="attachGallery"><svg class="svgi"><use href="#i-image"/></svg> 사진 (갤러리/카메라)</button>
+        <button class="btn-ghost block" id="attachFiles"><svg class="svgi"><use href="#i-folder"/></svg> PC 파일 검색</button>
+      </div>
+    </div>
+    <!-- 📁 PC 파일 브라우저 (daemon /files) -->
+    <div class="sl-modal" id="fileModal" hidden>
+      <div class="sl-box">
+        <div class="sl-head"><strong id="fileDir">📁 PC 파일</strong><button class="icon-btn" id="fileClose" aria-label="닫기"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+        <input type="text" id="fileSearch" placeholder="파일명 검색…" enterkeyhint="search" autocomplete="off" />
+        <div class="file-list" id="fileList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 값 편집 모달 (PWA standalone 에서 prompt() 무시 → 앱 내부 입력) -->
+  <div class="sl-modal" id="editModal" hidden>
+    <div class="sl-box">
+      <div class="sl-head"><strong id="editLabel">설정</strong><button class="icon-btn" id="editCancel" aria-label="취소"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+      <input type="text" id="editInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+      <!-- 캡처 흐름 preset (예: "제목이랑 같음") — editPrompt(opts.preset) 가 노출/숨김 -->
+      <button class="btn-ghost block" id="editPreset" hidden></button>
+      <button class="btn-primary block" id="editOk">확인</button>
+    </div>
+  </div>
+
+  <!-- V2.3 — 🧠 설계 셋업 마법사 (처음 쓰는 사람 기준: 단계마다 "어디를 누르는지" 번호로 + ⑤ 연결 확인 + ⑥ 문제 해결) -->
+  <div class="sl-modal" id="wizModal" hidden>
+    <div class="sl-box wiz-box">
+      <div class="sl-head"><strong>🧠 설계 모드 셋업 (1회, 약 3분)</strong><button class="icon-btn" id="wizClose" aria-label="닫기"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+      <p class="dim">PC 가 꺼져 있어도 폰의 Claude 가 <strong>내 작업 지식 폴더</strong>를 읽고 함께 설계하게 만듭니다. ①부터 ⑥까지 위에서부터 순서대로 따라 하면 됩니다.</p>
+      <div class="wiz-step">
+        <strong>① 프로젝트 만들기</strong>
+        <p class="dim">1. 아래 버튼 → 브라우저로 claude.ai 가 열림 (Claude 계정 로그인)<br>
+        2. <strong>새 프로젝트</strong> 버튼 → 이름 <em>"🧠 설계 모드"</em> 입력 → 만들기<br>
+        <span class="dim">⚠️ 핵심은 <strong>같은 Claude 계정</strong> — 만들 때와 열 때 계정이 다르면 "액세스 권한 없음"이 뜹니다. 폰이든 PC 든 같은 계정이면 OK. 잘 모르겠으면 이 버튼으로 열린 브라우저에서 만드세요.</span></p>
+        <button class="btn-ghost block" id="wizOpenProjects">🌐 claude.ai 열기</button>
+      </div>
+      <div class="wiz-step">
+        <strong>② Drive 연결 — 프로젝트 안 <em>"파일"</em> 영역에서 (= 지식. 화면엔 메모리/지침/파일로 보임)</strong>
+        <p class="dim">1. 프로젝트 <strong>"🧠 설계 모드"</strong> 를 열기 (폰이 불편하면 PC 브라우저, 같은 계정)<br>
+        2. <strong>파일</strong> 영역의 <strong>＋</strong> 누르기<br>
+        3. <strong>Drive</strong> 선택 — 처음이면 Google 로그인 + 권한 모두 <strong>허용</strong><br>
+        4. 검색창에 <code>Claude_GMD</code> — <strong>폴더가 뜨면 폴더 추가</strong>. 폴더 선택이 안 되는 화면이면 <code>DESIGN_MANIFEST</code> 검색해 그 <strong>파일</strong> 추가<br>
+        <span class="dim">• ＋에 Drive 선택지가 없으면 = 계정에 Drive 커넥터 미연결. <strong>PC 웹</strong>에서: 채팅 입력칸 옆 <strong>＋ → 커넥터 → 커넥터 관리</strong> (또는 왼쪽 <strong>사용자 지정 → 커넥터</strong>) → ＋ → <strong>Google Drive → 연결</strong> → 권한 허용 → 프로젝트로 돌아와 파일 ＋ 다시 (폰 커넥터 설치는 베타 — PC 웹에서 한 번 연결하면 폰에도 적용)<br>
+        • Drive 추가는 비공개 프로젝트에서만 가능<br>
+        • ✅ 파일 목록에 폴더(또는 매니페스트 파일)가 떠 있으면 성공</span></p>
+      </div>
+      <div class="wiz-step">
+        <strong>③ 지시문 붙여넣기</strong>
+        <p class="dim">1. 아래 버튼 → 지시문이 복사됨<br>
+        2. 프로젝트 화면의 <strong>지침(Instructions) 설정</strong> 칸 열기 → 붙여넣기 → 저장<br>
+        <span class="dim">이 글이 "내 지식 폴더를 읽고 <em>설계만</em> 해라"라고 Claude 에게 시키는 내용입니다.</span></p>
+        <button class="btn-primary block" id="wizCopyBrief">📋 지시문 복사</button>
+      </div>
+      <div class="wiz-step">
+        <strong>④ 프로젝트 주소 저장</strong>
+        <p class="dim">1. 브라우저 주소창의 프로젝트 주소(<code>https://claude.ai/project/…</code>)를 길게 눌러 <strong>복사</strong><br>
+        2. 아래 버튼 탭 → 붙여넣고 확인<br>
+        <span class="dim">이때부터 설계 탭의 🧠 버튼이 이 프로젝트로 바로 연결됩니다.</span></p>
+        <button class="btn-primary block" id="wizSetUrl">🔗 프로젝트 주소 저장</button>
+      </div>
+      <div class="wiz-step">
+        <strong>⑤ 연결 확인 (중요 — 꼭 한 번)</strong>
+        <p class="dim">1. 아래 첫 버튼 → 확인 질문이 복사됨<br>
+        2. 둘째 버튼으로 설계 대화 열기 → 질문 붙여넣고 전송<br>
+        <span class="dim">✅ 매니페스트 요약이 나오면 <strong>셋업 완료</strong> / ❌ "못 읽는다"고 답하면 아래 ⑥.</span></p>
+        <button class="btn-primary block" id="wizCopyTest">📋 확인 질문 복사</button>
+        <button class="btn-ghost block" id="wizOpenChat">✅ 설계 대화 열기</button>
+      </div>
+      <div class="wiz-step">
+        <strong>⑥ 안 될 때 (문제 해결)</strong>
+        <p class="dim">• 파일 ＋에 Drive 가 끝내 안 떠도 OK — <strong>대화 안에서</strong> 입력칸 옆 <strong>＋ → 커넥터 → Google Drive 켜기</strong> → "Google Drive 에서 DESIGN_MANIFEST.md 검색해 요약해줘" 전송. 검색으로 읽히면 파일 추가 없이도 정상 작동 (실측 검증된 경로)<br>
+        • Claude 가 "도구/커넥터가 없다"고 함 → 대화에 뜨는 <strong>"커넥터 검색 허용"</strong> 물음에 <strong>허용</strong><br>
+        • 폴더는 연결됐는데 파일을 못 읽음 → ② 에서 <code>Claude_GMD/ClaudeConfig</code> 폴더로 <strong>다시 연결</strong> (하위 폴더가 안 읽히는 환경 — 거기에도 같은 안내 파일이 있음)</p>
+      </div>
+      <p class="dim">평소 사용: 설계 대화에서 스펙 확정 → 복사 → 설계 탭 <strong>📋 스펙 붙여넣기</strong> → PC 켜지면 자동 전송 → 대시보드 ▶ 진행.</p>
+    </div>
+  </div>
+
+  <!-- V2 — 멀티라인 입력 모달 (📋 스펙 붙여넣기) -->
+  <div class="sl-modal" id="textModal" hidden>
+    <div class="sl-box">
+      <div class="sl-head"><strong id="textLabel">입력</strong><button class="icon-btn" id="textCancel" aria-label="취소"><svg class="svgi"><use href="#i-x"/></svg></button></div>
+      <textarea id="textInput" rows="10" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+      <!-- 캡처 흐름 preset (예: "제목이랑 같음") — editText(opts.preset) 가 노출/숨김 -->
+      <button class="btn-ghost block" id="textPreset" hidden></button>
+      <button class="btn-primary block" id="textOk">확인</button>
+    </div>
+  </div>
+
+  <!-- C80-P01: 하단 탭 바 3개 -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tab is-active" data-tab="dashboard"><span class="tab-ico"><svg class="svgi"><use href="#i-grid"/></svg></span><span>대시보드</span></button>
+    <button class="tab" data-tab="design"><span class="tab-ico"><svg class="svgi"><use href="#i-pen"/></svg></span><span>설계</span></button>
+    <button class="tab" data-tab="settings"><span class="tab-ico"><svg class="svgi"><use href="#i-gear"/></svg></span><span>설정</span></button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

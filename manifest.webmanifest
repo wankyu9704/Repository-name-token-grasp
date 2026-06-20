@@ -1,0 +1,14 @@
+{
+  "name": "Token Grasp",
+  "short_name": "Token Grasp",
+  "description": "모바일에서 PC Claude Code 구동 + 설계 모드",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.png?v=4", "sizes": "256x256", "type": "image/png", "purpose": "any" }
+  ]
+}

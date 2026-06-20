@@ -1,0 +1,454 @@
+/* ClaudeMobileBridge PWA 셸 — C80-P01~P08 반영 */
+:root {
+  /* C80-P02: 8pt 그리드 */
+  --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px;
+  --r: 14px;
+  --touch: 48px;            /* C80-P02: 최소 터치 타깃 */
+  /* D1 (2026-06-12) — M3 tonal elevation: 다크 위계 = 그림자 대신 표면 명도 4단 (canvas→surface→card→elevated) */
+  --bg: #101014;            /* canvas (M3 surface N6 근사) */
+  --surface: #191920;       /* container low — 그룹/배너 */
+  --surface-2: #21212a;     /* container — 카드 */
+  --surface-3: #2a2a35;    /* container high — 모달/active 표면 */
+  --border: rgba(255,255,255,.08);   /* NateBal dark best practice — 강한 회색 보더 대체 */
+  --text: #e8e4ec;          /* onSurface, 대비 ≥ 4.5:1 */
+  --dim: #a8a3b0;           /* onSurfaceVariant, 서브 ≥ 3:1 */
+  --accent: #4a9eff;
+  --green: #34c759;
+  --amber: #ffb340;
+  --moon: #9aa6ff;
+  --danger: #ff6b5e;
+  /* D5 — M3 motion tokens */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* E1 (2026-06-12) — 🔥 근본 fix: author display(flex 등)가 UA [hidden]{display:none} 을 항상 이김
+   → .tab-panel 3개가 한 페이지에 동시 노출 = "탭 무반응" 의 정체. 전역 보호로 현재+미래 요소 모두 커버. */
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  /* v84 — 갤럭시 3버튼 내비 fix: 100dvh 가 일부 삼성 기기/브라우저에서 시스템 버튼 바 영역까지 포함
+     → body 가 화면보다 길어져 탭바가 버튼 바 밑으로 밀림. 100% = 실제 창 높이 (ICB) 기반이라 정확. */
+  display: flex; flex-direction: column; height: 100%; overflow: hidden;
+}
+
+/* ── 상태 배너 (C80-P04 점+텍스트, C80-P07 safe-area top) ── */
+.status-banner {
+  display: flex; align-items: center; gap: var(--s1);
+  padding: var(--s1) var(--s2);
+  padding-top: calc(var(--s1) + env(safe-area-inset-top));
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.status-banner .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+.status-banner .status-text { font-weight: 600; font-size: 14px; flex: 1 1 auto; }   /* D9 */
+.status-banner .ver-chip { font-size: 11px; color: var(--dim); flex: 0 0 auto; }
+.status-banner[data-mode="full"]   .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.status-banner[data-mode="design"] .dot { background: var(--moon); }
+.status-banner[data-mode="checking"] .dot { background: var(--amber); }
+
+.icon-btn {
+  min-width: var(--touch); min-height: var(--touch);
+  background: none; border: none; color: var(--text); font-size: 20px; border-radius: var(--r);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.icon-btn:active { background: var(--surface-2); }
+.icon-btn.term-icon svg { display: block; }
+
+/* ── 본문 스크롤 영역 ── */
+main {
+  flex: 1 1 auto; overflow-y: auto;
+  padding: var(--s2);
+  padding-bottom: calc(var(--touch) + var(--touch) + var(--s3)); /* fab + tabbar 여백 */
+}
+.tab-panel { display: flex; flex-direction: column; gap: var(--s2); }
+/* D5 — 탭 패널 진입 모션 (M3 standard 300ms). 카드 개별 anim 은 폴링 재렌더 깜빡임이라 의도적 제외 */
+@media (prefers-reduced-motion: no-preference) {
+  .tab-panel:not([hidden]) { animation: panelIn 300ms var(--ease-standard); }
+  @keyframes panelIn { from { opacity: .35; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}
+
+/* ── 칩 (필터, 가로 스크롤) ── */
+.chips { display: flex; gap: var(--s1); overflow-x: auto; padding-bottom: var(--s1); }
+.chip {
+  flex: 0 0 auto; min-height: 40px; padding: 0 var(--s2);
+  background: var(--surface-2); color: var(--dim);
+  border: 1px solid var(--border); border-radius: 999px; font-size: 14px;
+}
+.chip.is-active { color: var(--text); border-color: var(--accent); background: #1b2b3f; }
+
+/* ── 카드 (D4 — M3 cards: 표면 단계 + radius 14 + padding 16 + 위계 색) ── */
+.card-list { display: flex; flex-direction: column; gap: 10px; }
+.card {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: var(--s2); display: flex; flex-direction: column; gap: 6px;
+}
+.card:active { background: var(--surface-3); }
+.card .row-actions { display: flex; gap: var(--s1); flex-wrap: wrap; }
+.empty { color: var(--dim); text-align: center; padding: var(--s3); }
+
+/* ── E1 (2026-05-31) — 리스트 행 밀도 + 인라인 액션 버튼 / D2 타입 스케일 (titleMedium 16 / bodySmall 12) ── */
+.card { min-height: 56px; }
+.card > strong { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
+.card > .dim { font-size: 12px; line-height: 1.45; }
+
+/* D6 — 스켈레톤 로딩 (NN/g: 최종 카드와 같은 모양 + 좌→우 shimmer) */
+.skel {
+  height: 76px; border-radius: var(--r); border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-3) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skel { animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+}
+
+/* D7 — 작업 상태 pill (GitHub Mobile Live Activities 4-state 어휘) */
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 10px; border-radius: 999px; align-self: flex-start; }
+.pill-run  { background: rgba(52,199,89,.14); color: var(--green); }
+.pill-wait { background: rgba(255,179,64,.16); color: var(--amber); }
+.pill-call { background: rgba(74,158,255,.14); color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .pill-run::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+}
+.card button[data-claim], .card button[data-done] {
+  align-self: flex-start; min-height: 40px; padding: 0 14px; margin-top: 2px;
+  background: var(--surface-2); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px; font-size: 13px;
+}
+.card button[data-claim]:active, .card button[data-done]:active { background: var(--accent); color: #fff; }
+/* E3 pull-to-refresh — main transform 시 부드럽게 (touchend snap-back 은 inline transition) */
+main.ptr-pull { will-change: transform; }
+
+/* #7 (2026-05-31) — pull-to-refresh 인디케이터: 우측 상단 고정 (헤더 아래). 당김 정도 따라 회전, 임계 넘으면 강조 */
+.ptr-indicator {
+  position: fixed; top: calc(var(--touch) + 10px); right: 14px; z-index: 60;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--surface-2); color: #4a9eff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1; pointer-events: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,.45);
+  opacity: 0; transition: opacity .15s ease;
+}
+.ptr-indicator.show { opacity: 1; }
+.ptr-indicator.ready { background: #4a9eff; color: #fff; }
+
+/* ── E5 (2026-05-31) 빈 상태 (아이콘 + 제목 + 힌트) ── */
+.empty-rich { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: var(--s4) var(--s2); }
+.empty-rich .empty-icon { font-size: 40px; opacity: .8; }
+.empty-rich .empty-title { font-size: 15px; color: var(--text); }
+.empty-rich .empty-hint { font-size: 12px; color: var(--dim); text-align: center; line-height: 1.4; }
+
+/* ── E2 (2026-05-31) swipe-to-action — 세로 스크롤은 native, 가로는 JS (왼쪽 swipe = iOS edge-back 과 직교) ── */
+.spec-card { touch-action: pan-y; }
+
+/* ── 빈/오프라인 안내 ── */
+.offline-note { text-align: center; padding: var(--s4) var(--s2); display: flex; flex-direction: column; gap: var(--s2); align-items: center; }
+.big-icon { font-size: 48px; }
+.dim { color: var(--dim); }
+.lead { color: var(--dim); margin: 0; }
+a { color: var(--accent); }
+
+/* ── 그룹 리스트 (C80-P05 설정) — D2 섹션 헤더 = labelSmall + 자간 (overline 위계) ── */
+.group-title { font-size: 12px; color: var(--dim); text-transform: none; margin: var(--s3) 0 var(--s1); font-weight: 600; letter-spacing: .04em; }
+.group-title:first-child { margin-top: 0; }
+
+/* D10 (2026-06-12) — SVG 라인 아이콘 공통: index.html sprite <use>. currentColor = 부모 텍스트색 따름 (테마/상태색 자동) */
+.svgi {
+  width: 1.1em; height: 1.1em;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  display: inline-block; vertical-align: -0.18em; flex: 0 0 auto;
+}
+.tab-ico .svgi { width: 21px; height: 21px; stroke-width: 1.9; vertical-align: middle; }
+.icon-btn .svgi { width: 20px; height: 20px; vertical-align: middle; }
+.big-icon .svgi { width: 46px; height: 46px; stroke-width: 1.5; color: var(--dim); }
+.empty-icon .svgi { width: 36px; height: 36px; stroke-width: 1.5; color: var(--dim); }
+.settings-group .ico .svgi { width: 17px; height: 17px; color: var(--dim); }
+.qr-btn .svgi, .fab-bar .svgi, .btn-primary .svgi, .btn-ghost .svgi { width: 1em; height: 1em; margin-right: 2px; }
+.group-title .svgi { width: 14px; height: 14px; }
+.group-title.gt-warn { color: #e0a800; }      /* 승인 대기 헤더 = 호박 (긴급 위계 유지 — 옛 ⚠️ 색 역할) */
+.group-title.gt-decide { color: #a78bfa; }    /* 결정 필요 헤더 = 보라 (spec-card 띠와 일치) */
+.prompt-card strong.ic-danger .svgi { color: #e88a86; }
+.prompt-card strong.ic-warn .svgi { color: #e0a800; }
+
+/* F2 (2026-06-12) — 승인 카드 직전 출력 tail 미리보기 (progressive disclosure) */
+.prompt-tail summary { font-size: 11px; color: var(--dim); cursor: pointer; padding: 2px 0; }
+.prompt-tail pre {
+  margin: 4px 0 0; padding: 8px; max-height: 160px; overflow: auto;
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-all;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--dim);
+}
+.settings-group { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.settings-group li {
+  min-height: var(--touch);
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s1) var(--s2); border-top: 1px solid var(--border);
+}
+.settings-group li:first-child { border-top: none; }
+.settings-group .ico { width: 24px; text-align: center; flex: 0 0 auto; }
+.settings-group .label { flex: 1 1 auto; }
+.settings-group .value { color: var(--dim); font-size: 13px; max-width: 55%; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-group.is-disabled { opacity: 0.5; }
+
+/* ── 버튼 (C80-P02 ≥48px) — D9 M3 pill 버튼 ── */
+.btn-primary, .btn-ghost {
+  min-height: var(--touch); padding: 0 var(--s3);
+  border-radius: 999px; font-size: 15px; font-weight: 600; border: 1px solid transparent;
+}
+.btn-primary { background: var(--accent); color: #04101f; }
+.btn-primary:active { filter: brightness(0.9); }
+.btn-ghost { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn-primary:disabled, .btn-ghost:disabled { opacity: 0.45; }
+.block { width: 100%; }
+.btn-sm { min-height: 40px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-size: 13px; }
+
+/* ── 하단 1차 액션 (C80-P03 엄지 존) ── */
+.fab-bar {
+  position: fixed; left: 0; right: 0;
+  bottom: calc(var(--touch) + env(safe-area-inset-bottom) + var(--s1));
+  padding: 0 var(--s2); display: flex; gap: var(--s1); z-index: 5; pointer-events: none;
+}
+.fab-bar > * { pointer-events: auto; flex: 1 1 auto; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.fab-bar:empty { display: none; }
+
+/* ── 하단 탭 바 (C80-P01, C80-P07 safe-area bottom) ── */
+.tabbar {
+  flex: 0 0 auto; display: flex; background: var(--surface); border-top: 1px solid var(--border);
+  /* E7 — Chrome 135+ edge-to-edge: env() 0 보고 기기에서도 제스처 영역과 최소 간격 확보 */
+  padding-bottom: max(env(safe-area-inset-bottom), 4px);
+}
+.tab {
+  flex: 1 1 0; min-height: var(--touch);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: none; border: none; color: var(--dim); font-size: 12px; font-weight: 500; padding: 8px 0 9px;
+}
+/* D3 — M3 Navigation Bar active indicator: 밑줄 아닌 알약 pill (아이콘 컨테이너 56×30) */
+.tab .tab-ico {
+  font-size: 19px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 30px; border-radius: 999px;
+  transition: background 200ms var(--ease-standard);
+}
+.tab.is-active { color: var(--accent); }
+.tab.is-active .tab-ico { background: rgba(74, 158, 255, .16); }
+.tab:active .tab-ico { background: var(--surface-3); }   /* E5 — 탭 눌림 즉시 피드백 (C00-P02) */
+
+/* #2 (2026-05-31) — task md 카드 진행률 바 + 🚀 진행 (Agent Launcher 진행 버튼 모바일판) */
+/* origin 구분 왼쪽 색 띠 (2026-05-31) — 📋 작업목록(PC)=파랑 / 🟡 결정필요(모바일)=보라 / 📞 라이브 터미널=초록 */
+.task-card { border-left: 4px solid #4a9eff; }
+.spec-card { border-left: 4px solid #a78bfa; }
+.job-card  { border-left: 4px solid #34c759; }
+.task-card .task-bar { height: 6px; background: var(--surface-2); border-radius: 3px; margin: 8px 0 6px; overflow: hidden; }
+.task-card .task-bar-fill { height: 100%; background: var(--accent, #4a9eff); border-radius: 3px; transition: width .3s; }
+.task-card .task-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+/* statusline 모달 (ℹ︎ → 창 + 복사 + 닫기) */
+.sl-modal { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: var(--s2); }
+.sl-modal[hidden] { display: none; }
+.sl-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s2); max-width: 100%; width: 100%; max-height: 80vh; display: flex; flex-direction: column; gap: var(--s2); }
+.sl-head { display: flex; align-items: center; justify-content: space-between; }
+/* 폰 전용 카테고리 레이아웃 — 라벨(색) + 알약 칩, 정보 줄은 색 보존 (app.js renderStatuslineHtml) */
+.sl-text { flex: 1 1 auto; overflow: auto; background: #000; padding: var(--s2); border-radius: var(--r); margin: 0; display: flex; flex-direction: column; gap: 11px; }
+.sl-info { font-family: Consolas, monospace; font-size: 12px; line-height: 1.55; color: #ececec; word-break: break-word; }
+.sl-cat { display: flex; flex-direction: column; gap: 5px; }
+.sl-cat-label { font-weight: 700; font-size: 13px; letter-spacing: .02em; }
+.sl-cat-items { display: flex; flex-wrap: wrap; gap: 5px; }
+.sl-pill { font-family: Consolas, monospace; font-size: 11px; background: #1e1e1e; color: #cfcfcf; border: 1px solid #333538; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.btn-primary.block { width: 100%; }
+/* 🅲-2 PC 파일 브라우저 — 폴더 navigate / 파일 탭 → 경로 주입 */
+#fileSearch, #editInput { width: 100%; min-height: var(--touch); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--r); padding: 0 var(--s2); font-size: 15px; }
+.file-list { flex: 1 1 auto; overflow: auto; -webkit-overflow-scrolling: touch; max-height: 50vh; }
+.file-row { min-height: 44px; display: flex; align-items: center; padding: 0 var(--s1); border-bottom: 1px solid var(--border); color: var(--text); font-size: 14px; word-break: break-all; }
+.file-row:active { background: var(--surface-2); }
+.file-row.file-pick { color: var(--accent); }
+
+/* 칸 늘리기 — ⛶ 전체화면(fs): 헤더 title + 멀티세션 탭 접어 출력 영역 최대 (버튼은 유지=복귀 가능) */
+.term-overlay.fs .term-header { min-height: 0; padding: 0 4px; }
+.term-overlay.fs .term-header .icon-btn { min-height: 36px; }
+.term-overlay.fs .term-title { display: none; }
+.term-overlay.fs .term-tabs { display: none !important; }
+
+/* ── P1-b: 터미널 overlay (FULL 라이브 세션) ── */
+/* 버그1 (2026-05-31): 모바일 키보드 대응 — height 는 JS(visualViewport)가 키보드 높이만큼 override.
+   bottom 고정 대신 top+height 로 두어야 JS height 가 먹음(top+bottom 둘 다면 height 무시됨). */
+.term-overlay {
+  position: fixed; top: 0; left: 0; right: 0; height: 100%; z-index: 50;   /* v84 — 100dvh 동일 fix (키보드 시 JS visualViewport 가 height override — 기존 동작 보존) */
+  display: flex; flex-direction: column;
+  background: #000;
+}
+.term-overlay[hidden] { display: none; }
+.term-header {
+  display: flex; align-items: center; gap: 2px;
+  /* 칸 높이 축소 — 글자만이 아니라 헤더 칸 자체를 절반으로 (사용자 요청 2026-05-31) */
+  padding: 2px var(--s2);
+  padding-top: calc(2px + env(safe-area-inset-top));
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+/* 헤더 안 버튼만 작게 (전역 48px touch 타깃 override) — 헤더 칸 높이 결정 요소 */
+.term-header .icon-btn { min-height: 34px; min-width: 34px; font-size: 17px; }
+/* 세션명은 참고용 — 폰 헤더에서 절반 크기로 줄여 덜 압도적이게 (사용자 요청 2026-05-31) */
+.term-title { flex: 1 1 auto; font-weight: 500; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-body { flex: 1 1 auto; overflow: hidden; padding: var(--s1); background: #000; }
+.term-body .xterm { height: 100%; }
+.term-input-bar {
+  display: flex; gap: var(--s1); padding: var(--s1) var(--s2);
+  padding-bottom: calc(var(--s1) + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.term-input-bar input {
+  flex: 1 1 auto; min-height: var(--touch);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid #4a9eff; border-radius: var(--r);   /* #8: 입력 통로 명확히 강조 (단일 입력칸) */
+  padding: 0 var(--s2); font-size: 15px;
+}
+.term-input-bar input:focus { outline: 2px solid #4a9eff; outline-offset: -1px; }
+.term-input-bar .btn-primary { min-width: 56px; }
+/* #8: xterm 본문 탭 시 "여기 입력" 유도 — 입력바 흔들림 힌트 */
+.term-input-bar.shake { animation: barShake .32s ease; }
+@keyframes barShake { 0%,100%{transform:none} 20%{transform:translateX(-7px)} 60%{transform:translateX(7px)} 80%{transform:translateX(-3px)} }
+
+/* ── E9: 탭 승인 quick-reply 버튼 (입력바 위, raw 입력 항상 병존) ── */
+.quick-replies {
+  display: flex; flex-wrap: nowrap; gap: 8px;   /* 한 줄(모바일) — 길면 가로 스크롤. gap 8 = 오터치 ↓ */
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: var(--s1) var(--s2);
+  background: var(--surface); border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.quick-replies .qr-spacer { flex: 1 1 16px; min-width: 16px; }   /* Yes 그룹 ↔ No 사이 간격(오터치 방지) */
+.qr-btn.qr-no { border-color: #d9534f; color: #e88a86; }          /* No = 빨강 계열 시각 구분 */
+.quick-replies[hidden] { display: none; }
+.quick-replies .qr-hint { flex: 1 1 100%; font-size: 11px; color: #8a8a8a; margin-bottom: 2px; }
+.qr-btn {
+  flex: 0 0 auto; white-space: nowrap;          /* 줄바꿈 X — 한 줄 유지 */
+  min-height: var(--touch); padding: 0 var(--s2);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 999px;
+  font-size: 14px;
+}
+.qr-btn:active { background: var(--accent); color: #fff; }
+.qr-btn.qr-danger { border-color: #d9534f; color: #e88a86; }
+.qr-btn.qr-danger:active { background: #d9534f; color: #fff; }
+/* D8 — Toss 단일 행동 위계: 승인 = filled (1차) / 거부 = 빨강 outlined / 지시·열기 = ghost (보조) */
+.qr-btn.qr-yes { background: var(--accent); color: #04101f; border-color: var(--accent); font-weight: 600; }
+.qr-btn.qr-yes:active { filter: brightness(0.9); }
+.qr-btn.qr-aux { border-color: var(--border); color: var(--dim); }
+
+/* ── 멀티세션 탭바 (overlay 상단) ── */
+.term-tabs {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding: 6px var(--s2); background: var(--surface);
+  border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.term-tabs[hidden] { display: none; }
+.term-tab {
+  flex: 0 0 auto; min-height: 36px; max-width: 160px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 10px; border-radius: 999px; font-size: 12px;
+  background: var(--surface-2); color: var(--dim);
+  border: 1px solid var(--border);
+}
+.term-tab.is-active { color: var(--text); border-color: var(--accent); background: #1b2b3f; }
+.term-tab .st-dot { font-size: 9px; flex: 0 0 auto; }
+.term-tab .st-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-tab .st-x {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--dim);
+}
+.term-tab .st-x:active { background: var(--danger); color: #fff; }
+.term-tab-add { min-width: 36px; justify-content: center; font-size: 18px; color: var(--accent); }
+
+/* 세션 pane — term-body 안에 세션별 1개, 활성만 display:block (JS 토글) */
+.term-pane { height: 100%; }
+.term-pane .xterm { height: 100%; }
+
+/* ── E8 상태 집계 헤더 + E6 Triage 섹션 ── */
+.jobs-stat { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--s1); }
+.stat-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+}
+.stat-chip.stat-wait { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.stat-chip.stat-dim { color: #8a8a8a; }
+.jobs-section {
+  font-size: 11px; letter-spacing: .04em; color: #8a8a8a;
+  margin: var(--s2) 0 6px; padding-bottom: 2px;
+}
+.jobs-section.jobs-triage { color: var(--accent); font-weight: 600; }
+
+/* ── job cards (tap = restore or info) ── */
+.job-card { cursor: pointer; transition: border-color .12s; }
+.job-card:active { border-color: var(--accent); }
+.job-card[data-attached="1"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.attached-badge {
+  display: inline-block;
+  background: var(--accent); color: #04101f;
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  margin-top: 4px;
+}
+
+/* ── archived jobs details (collapsible) ── */
+.jobs-archived-wrap { margin-top: var(--s2); }
+.jobs-archived-wrap summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: var(--s1);
+  min-height: var(--touch);
+}
+.jobs-archived-wrap summary::-webkit-details-marker { display: none; }
+.jobs-archived-wrap summary::before {
+  content: '▶'; font-size: 10px; color: var(--dim); transition: transform .15s;
+}
+.jobs-archived-wrap[open] summary::before { transform: rotate(90deg); }
+.jobs-archived-wrap[open] { padding-bottom: var(--s2); }
+.jobs-archived-wrap .card { opacity: 0.7; }
+
+/* ── P2: 가벼운 토스트 (상태 변경 알림 — Notification API 회피 / DOM only) ── */
+.cmb-toast {
+  position: fixed;
+  left: 50%; transform: translateX(-50%) translateY(20px);
+  bottom: calc(var(--touch) + var(--touch) + env(safe-area-inset-bottom) + var(--s2));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  font-size: 14px; font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+  z-index: 60;
+  max-width: calc(100% - var(--s4));
+  text-align: center;
+}
+.cmb-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── V2 (2026-06-11) — 승인 센터 카드 / 설계 셋업 마법사 / 멀티라인 모달 ── */
+.prompt-card { border-left: 3px solid #e0a800; }
+.prompt-card .prompt-text { font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 90px; overflow: hidden; }
+.prompt-card .task-actions { flex-wrap: wrap; }
+
+.wiz-box { max-height: 85vh; overflow-y: auto; }
+.wiz-step { margin: var(--s2) 0; padding: var(--s1) var(--s2); border: 1px solid var(--border, #333); border-radius: var(--r, 8px); font-size: 14px; line-height: 1.5; }
+.wiz-step > strong { display: block; margin-bottom: 4px; }
+.wiz-step p { margin: 4px 0 8px; }
+.wiz-step code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+#textInput {
+  width: 100%; box-sizing: border-box; min-height: 200px;
+  background: var(--bg, #1b1b1b); color: var(--text, #ececec);
+  border: 1px solid var(--border, #333); border-radius: var(--r, 8px);
+  padding: var(--s1) var(--s2); margin: var(--s1) 0;
+  font-size: 14px; font-family: inherit; resize: vertical;
+}
+
