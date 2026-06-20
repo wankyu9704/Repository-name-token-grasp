@@ -79,13 +79,16 @@ async function probeHealth(base, ms) {
   } catch (_) { return false; }
 }
 
-// health 후보 목록 — 현재 base → (https면) origin → 캐시된 reachable(/config). 집 LAN↔셀룰러 주소 mismatch 방어.
+// health 후보 목록 — 현재 base → (https면) origin → 캐시된 reachable(/config) → 하드코딩 ts.net fallback.
+// 닭-달걀 해결: GitHub Pages 첫 접속 시 캐시 0 → fallback 으로 ts.net 시도 → 성공 시 캐시 채움.
+const TS_FALLBACK = ['https://desktop-4n1m12q.tail93b52a.ts.net', 'https://desktop-781kfnb.tail93b52a.ts.net'];
 function healthCandidates() {
   const seen = new Set(); const list = [];
   const add = (u) => { if (!u) return; u = u.replace(/\/$/, ''); if (!seen.has(u)) { seen.add(u); list.push(u); } };
   add(daemonBase());
   if (location.protocol === 'https:') add(location.origin);
   try { JSON.parse(localStorage.getItem('cmbReachable') || '[]').forEach(add); } catch (_) {}
+  TS_FALLBACK.forEach(add);
   // https 페이지에선 http 후보 = mixed-content 차단 → 제거
   return location.protocol === 'https:' ? list.filter((u) => !u.startsWith('http:')) : list;
 }
@@ -125,6 +128,10 @@ async function checkHealth(opts = {}) {
       // R1 (2026-06-13) — reachable 캐시 신선화: 옛 "빈 값일 때만" = 한 번 캐시되면 영구 stale → 다른 PC(peers) 주소 영영 못 배움.
       // 전환 시 + 수동 ⟳ 시 + 빈 값일 때 재캐시 (daemon 의 /config reachable 엔 config.peers = 다른 PC 주소 포함).
       if (switched || opts.manual || !localStorage.getItem('cmbReachable')) cacheReachableFrom(base);
+      // 토큰 미설정 시 자동 안내 — health 는 토큰 없이 통과하지만 나머지 API 전부 실패
+      if (!cmbToken()) {
+        toast('🔑 PC 발견! 설정 탭 → daemon 토큰 입력 필요');
+      }
       break;
     }
   }
